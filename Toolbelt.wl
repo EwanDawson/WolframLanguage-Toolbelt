@@ -23,6 +23,9 @@ XmlToRules;
 CopyInitializationCells;
 
 
+Simplepush;
+
+
 Begin["`Private`"];
 
 
@@ -66,6 +69,15 @@ XmlToRules[xml_] := xml //. {
 
 CopyInitializationCells[from_NotebookObject,to_NotebookObject] :=
 	NotebookWrite[to,NotebookRead[Select[Cells[from],MatchQ[Options[#],KeyValuePattern[{InitializationCell->True}]]&]]];
+
+
+Simplepush[title_String:Nothing, message_String] :=
+	With[{result = URLExecute[URLBuild[{"https://api.simplepush.io","send", $SimplepushID, title, message}]]},
+		Switch[result,
+			_Failure, result,
+			_, Success["MessageSent", <|
+				"MessageTemplate" -> "Successfully sent message to Simplepush client `id`",
+				"MessageParameters" -> <|"id"->$SimplepushID|>,"Timestamp"->DateString[]|>]]];
 
 
 (* ::Section::Closed:: *)

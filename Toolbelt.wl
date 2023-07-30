@@ -71,6 +71,11 @@ CopyInitializationCells[from_NotebookObject,to_NotebookObject] :=
 	NotebookWrite[to,NotebookRead[Select[Cells[from],MatchQ[Options[#],KeyValuePattern[{InitializationCell->True}]]&]]];
 
 
+(*
+	You'll want to create an initialization value for $SimplepushID. For example:
+	InitializationValue[$SimplepushID,{"Local","Cloud"}]="xxxxxx"
+	where "xxxxxx" is your personal Simplepush client ID.
+*)
 Simplepush[title_String:Nothing, message_String] :=
 	With[{result = URLExecute[URLBuild[{"https://api.simplepush.io","send", $SimplepushID, title, message}]]},
 		Switch[result,

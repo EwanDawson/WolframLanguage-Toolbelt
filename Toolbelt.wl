@@ -17,6 +17,12 @@ Datasetize;
 RulesToXml;
 
 
+XmlToRules;
+
+
+CopyInitializationCells;
+
+
 Begin["`Private`"];
 
 
@@ -40,6 +46,26 @@ RulesToXml[{}] = "";
 RulesToXml[] = "";
 RulesToXml[rules_List] := rules //. rulesToXmlReplacements;
 RulesToXml[rules__] := {rules} //. rulesToXmlReplacements
+
+
+XmlToRules[xml_] := xml //. {
+	XMLObject[_][_, XMLElement[_, _, children_], _] :> children,
+	XMLElement[tag_, {atts___Rule}, children_] :> XMLElement[tag, xmlAttributes[atts], children],
+	XMLElement[tag_, xmlAttributes[], {value_?AtomQ}] :> Rule[tag, value],
+	XMLElement[tag_, xmlAttributes[atts_], {value_?AtomQ}] :> Sequence@@{atts /. Rule[name_, val_] :> Rule[tag <> "_" <> name, val], Rule[tag, value]},
+	XMLElement[tag_, xmlAttributes[atts__], {value_?AtomQ}] :> Sequence@@Join[List@atts /. Rule[name_, val_] :> Rule[tag <> "_" <> name, val], {Rule[tag, value]}],
+	XMLElement[tag_, xmlAttributes[], {rules__Rule}] :> Rule[tag, {rules}],
+	XMLElement[tag_, xmlAttributes[atts_], {rules__Rule}] :> Rule[tag, {atts /. Rule[name_, val_] :> Rule[tag <> "_" <> name, val], rules}],
+	XMLElement[tag_, xmlAttributes[atts__], {rules__Rule}] :> Rule[tag, {List@atts /. Rule[name_, val_] :> Rule[tag <> "_" <> name, val], rules}],
+	XMLElement[tag_, xmlAttributes[atts_], {}] :> (atts /. Rule[name_, val_] :> Rule[tag <> "_" <> name, val]),
+	XMLElement[tag_, xmlAttributes[atts__], {}] :> (List@atts /. Rule[name_, val_] :> Rule[tag <> "_" <> name,val]),
+	XMLElement[_, xmlAttributes[], {}] -> Nothing,
+	array:{Rule[k_, _]..} :> (array /. Rule[k,v_] :> v)
+}
+
+
+CopyInitializationCells[from_NotebookObject,to_NotebookObject] :=
+	NotebookWrite[to,NotebookRead[Select[Cells[from],MatchQ[Options[#],KeyValuePattern[{InitializationCell->True}]]&]]];
 
 
 (* ::Section::Closed:: *)

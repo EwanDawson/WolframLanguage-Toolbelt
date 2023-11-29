@@ -4,26 +4,36 @@
 (*Package Header*)
 
 
-BeginPackage["EwanDawson`Toolbelt`"];
+BeginPackage["Toolbelt`"];
 
 
 (* ::Text:: *)
 (*Declare your public symbols here:*)
 
 
-Datasetize;
+Datasetize::usage = "Convert a nested structure of lists or rules (for example
+	the result of parsing a JSON document) into a Dataset.";
 
 
-RulesToXml;
+RulesToXml::usage = "Convert a nested structure of lists of rules into an XML document.";
 
 
-XmlToRules;
+XmlToRules::usage = "Convert an XML document into a nested structure of lists of rules.";
 
 
-CopyInitializationCells;
+CopyInitializationCells::usage = "Copy all the initialization cells in the current
+	notebook, and paste them at the current location. Useful for taking initialization cells
+	and putting them in a separate .wl file.";
 
 
-Simplepush;
+Simplepush::usage = "Send a message to a Simplepush client.
+	Takes an optional first argument, which is the title of the message.";
+
+
+ExtractNested;
+
+
+ImportJSONString;
 
 
 Begin["`Private`"];
@@ -71,21 +81,29 @@ CopyInitializationCells[from_NotebookObject,to_NotebookObject] :=
 	NotebookWrite[to,NotebookRead[Select[Cells[from],MatchQ[Options[#],KeyValuePattern[{InitializationCell->True}]]&]]];
 
 
-(*
-	You'll want to create an initialization value for $SimplepushID. For example:
-	InitializationValue[$SimplepushID,{"Local","Cloud"}]="xxxxxx"
-	where "xxxxxx" is your personal Simplepush client ID.
-*)
 Simplepush[title_String:Nothing, message_String] :=
-	With[{result = URLExecute[URLBuild[{"https://api.simplepush.io","send", $SimplepushID, title, message}]]},
-		Switch[result,
-			_Failure, result,
-			_, Success["MessageSent", <|
-				"MessageTemplate" -> "Successfully sent message to Simplepush client `id`",
-				"MessageParameters" -> <|"id"->$SimplepushID|>,"Timestamp"->DateString[]|>]]];
+	Module[{id = SystemCredential["simplepush.io"], result},
+		id = If[MissingQ[id],
+			 Enclose[ConfirmBy[AuthenticationDialog["Password", SystemCredentialKey -> "simplepush.io"], # =!= $Canceled &], Return]["Password"],
+			id["Secret"]];
+		With[{apiResult = URLExecute[URLBuild[{"https://api.simplepush.io","send", id, title, message}]]},
+			Switch[apiResult,
+				_Failure, result = apiResult,
+				_, result = Success["MessageSent", <|
+					"MessageTemplate" -> "Successfully sent message to Simplepush client `id`",
+					"MessageParameters" -> <|"id"->id|>,"Timestamp"->DateString[]|>]]];
+		result]
 
 
-(* ::Section::Closed:: *)
+ExtractNested[data_, path_List]:=
+	Fold[Quiet@Check[Extract[#1, #2], Null]&, data, path];
+
+
+ImportJSONString[json_String] :=
+	ImportByteArray[StringToByteArray[json, "UTF-8"], "JSON"];
+
+
+(* ::Section:: *)
 (*Package Footer*)
 
 

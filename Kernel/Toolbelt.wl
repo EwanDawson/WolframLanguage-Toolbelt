@@ -4,7 +4,7 @@
 (*Package Header*)
 
 
-BeginPackage["EwanDawson/Toolbelt`"];
+BeginPackage["EwanDawson`Toolbelt`",{"PacletTools`"}];
 
 
 Datasetize::usage = "Convert a nested structure of lists or rules (for example
@@ -45,8 +45,24 @@ WWWFormURLEncode;
 WWWFormURLDecode;
 
 
+ToUncPath::usage = "ToUncPath[path] takes a regular file path and returns a UNC path. The path may be given as a String or a File respresenting an absolute filesystem path or a URL with the \"file:\" scheme. The resulting value will have the same head as the path argument.";
+
+
+FromUncPath::usage = "FromUncPath[path] takes a UNC file path and returns a native OS filepath. The path may be given as a String or File, or as a URL with the \"file:\" scheme. The resulting value will have the same head as the path argument.";
+
+
 CreateCachedValue::usage = "
 	CreateCachedValue[10, DateObject] returns a function that, when first called invokes DateObject[], and caches the result for 15 seconds.
+";
+
+
+URLToFile::usage = "
+	URLToFile[file://path] returns File[path]. URLToFile[URL[file://path]] is equivalent, as is File[URL[file://path]].
+";
+
+
+PacletDeployLocal::usage = "
+PacketDeploy[dir] builds the paclet from the given source directory, and deploys the paclet archive to the first local PacletSite found in PacletSites[]. To specify a particular local PacletSite to deploy to, use the option \"LocalSite\" -> Name.
 ";
 
 
@@ -149,7 +165,6 @@ WWWFormURLDecode[data_String] :=
         ]
 
 
-(* ::Code::Initialization:: *)
 CreateCachedValue[name_, duration_, generator_] :=
     Function[{},
         With[{val = PersistentObject["Cachedvalue/" <> name, "KernelSession"
@@ -162,6 +177,109 @@ CreateCachedValue[name_, duration_, generator_] :=
             val["Value"]
         ]
     ];
+
+
+ToUncPath[path_String, OptionsPattern[]] :=
+    StringReplace[StartOfString | WordBoundary ~~ drive : {CharacterRange[
+        "A", "Z"], CharacterRange["a", "z"]} ~~ ":" ~~ sep : "/" | "\\" :> sep
+         <> sep <> OptionValue["Hostname"] <> sep <> drive <> "$" <> sep] @ path;
+
+ToUncPath[File[path_String]] :=
+    File[ToUncPath @ path];
+
+ToUncPath[URL[path_String ? (StringStartsQ["file://"])]] :=
+    URL["file:" <> ToUncPath @ URLToFile @ path];
+
+Options[ToUncPath] = {"Hostname" :> $MachineName};
+
+
+FromUncPath[path_String] :=
+    FileNameSplit @ path //
+    MapAt[StringReplace[__ ~~ drive : (CharacterRange["a", "z"] | CharacterRange[
+        "A", "Z"]) ~~ "$" ~~ EndOfString :> drive <> ":"], 1] //
+    ReplaceRepeated["" -> " "] //
+    FileNameJoin //
+    StringReplace[StartOfString ~~ " \\ \\" -> "\\\\"];
+
+FromUncPath[File[path_String]] :=
+    File[FromUncPath @ path];
+
+FromUncPath[URL[path_String ? (StringStartsQ["file://"])]] :=
+    URL["file:" <> FromUncPath @ URLToFile @ path];
+
+
+Unprotect[URL];
+
+URL /: File[URL[url_String ? (StringStartsQ["file://"])]] :=
+    File[
+        StringReplace[url, {"file:////" -> "//", "file:///" -> "/", "file://"
+             -> "//", "file:/" -> "/"}] //
+        FileNameSplit //
+        ReplaceRepeated["" -> " "] //
+        FileNameJoin //
+        StringReplace[StartOfString ~~ " \\ \\" -> "\\\\"]
+    ];
+
+Protect[URL];
+
+URLToFile[url_String ? (StringStartsQ["file://"])] :=
+    File[
+        StringReplace[url, {"file:////" -> "//", "file:///" -> "/", "file://"
+             -> "//", "file:/" -> "/"}] //
+        FileNameSplit //
+        ReplaceRepeated["" -> " "] //
+        FileNameJoin //
+        StringReplace[StartOfString ~~ " \\ \\" -> "\\\\"]
+    ];
+
+URLToFile[URL[url_String]] :=
+    URLToFile[url];
+
+
+PacletDeployLocal[dir_, OptionsPattern[]] :=
+    With[{siteName = OptionValue["LocalSite"] /. Automatic -> Blank[String
+        ], sites = PacletSites[]},
+        Module[{site, destDir, destPath, paclet},
+            Enclose[
+                site =
+                    ConfirmMatch[
+                        FirstCase[
+                            PacletSites[]
+                            ,
+                            PacletSiteObject[KeyValuePattern[{"Local"
+                                 -> True, "Name" -> siteName}]]
+                            ,
+                            Missing[
+                                "No local paclet site" <>
+                                    If[MatchQ[siteName, _String],
+                                        " named '" <> siteName <> "'"
+                                            
+                                        ,
+                                        "s"
+                                    ]
+                            ]
+                        ]
+                        ,
+                        _PacletSiteObject
+                    ];
+                destDir = FromUncPath @ URLToFile[(Apply[Identity] /*
+                     Lookup["URL"] @ site) <> "/Paclets"];
+                ConfirmAssert[DirectoryQ[destDir]];
+                destPath = FileNameJoin[{ExpandFileName @ destDir, FileNameTake[
+                    paclet, -1]}];
+                paclet = (Confirm @ PacletBuild[dir])["PacletArchive"
+                    ];
+                Confirm @ CopyFile[paclet, destPath, OverwriteTarget 
+                    -> True];
+                PacletManager`BuildPacletSiteFiles[FileNameDrop[destDir,
+                     -1]];
+                Confirm @ PacletSiteUpdate[site];
+                PacletObject[destPath]
+            ]
+        ]
+    ];
+
+Options[PacletDeployLocal] = {"LocalSite" -> Automatic};
 
 
 (* ::Section:: *)

@@ -36,7 +36,18 @@ NotablePaths::usage = "NotablePaths[] and NotablePaths[\"Local\"] shows the symb
 	NotablePaths[\"Cloud\"] shows the notable paths on the currenly active Wolfram Cloud account.
 	Sort the results using \"SortOrder\"\[Rule]{\"Symbol\",\"Value\"} (default) or \"SortOrder\"\[Rule]{\"Value\",\"Symbol\"}.
 	Change how the results are displayed by setting \"DisplayFunction\" to Automatic (default, dislays results in a Dataset),
-	Rule, None (same as Rule), Normal (same as Rule), Identity (a List of Lists), or your own function that will be applied to the results."
+	Rule, None (same as Rule), Normal (same as Rule), Identity (a List of Lists), or your own function that will be applied to the results.";
+
+
+WWWFormURLEncode;
+
+
+WWWFormURLDecode;
+
+
+CreateCachedValue::usage = "
+	CreateCachedValue[10, DateObject] returns a function that, when first called invokes DateObject[], and caches the result for 15 seconds.
+";
 
 
 Begin["`Private`"];
@@ -73,7 +84,7 @@ XmlToRules[xml_] := xml //. {
 	XMLElement[tag_, xmlAttributes[atts__], {}] :> (List@atts /. Rule[name_, val_] :> Rule[tag <> "_" <> name,val]),
 	XMLElement[_, xmlAttributes[], {}] -> Nothing,
 	array:{Rule[k_, _]..} :> (array /. Rule[k,v_] :> v)
-}
+};
 
 
 CopyInitializationCells[from_NotebookObject,to_NotebookObject] :=
@@ -91,7 +102,7 @@ Simplepush[title_String:Nothing, message_String] :=
 				_, result = Success["MessageSent", <|
 					"MessageTemplate" -> "Successfully sent message to Simplepush client `id`",
 					"MessageParameters" -> <|"id"->id|>,"Timestamp"->DateString[]|>]]];
-		result]
+		result];
 
 
 ExtractNested[data_, path_List]:=
@@ -122,7 +133,35 @@ NotablePaths[location_, OptionsPattern[{"SortOrder" -> {"Symbol", "Value"}, "Dis
       {"Value", "Symbol"}, Reverse,
       _, Identity]
     },
-    wrapper @ display @ SortBy[{#, Symbol[#]}& /@ Union[Names["$*Directory*"], Names["$*Base*"], Names["$*Path*"]], sorter]]
+    wrapper @ display @ SortBy[{#, Symbol[#]}& /@ Union[Names["$*Directory*"], Names["$*Base*"], Names["$*Path*"]], sorter]];
+
+
+WWWFormURLEncode[data_List] :=
+    StringRiffle[StringRiffle[URLEncode @* ToString /@ List @@ #, "="
+        ]& /@ data, "&"];
+
+WWWFormURLEncode[data_Association] :=
+    WWWFormURLEncode[Normal @ data];
+
+
+WWWFormURLDecode[data_String] :=
+    Rule @@ URLDecode /@ StringSplit[#, "="]& /@ StringSplit[data, "&"
+        ]
+
+
+(* ::Code::Initialization:: *)
+CreateCachedValue[name_, duration_, generator_] :=
+    Function[{},
+        With[{val = PersistentObject["Cachedvalue/" <> name, "KernelSession"
+            ]},
+            If[MissingQ[val["Value"]] || FailureQ[val["Value"]],
+                val["Value"] = generator[];
+                val["ExpirationDate"] = DatePlus[Now, {duration, "Second"
+                    }]
+            ];
+            val["Value"]
+        ]
+    ];
 
 
 (* ::Section:: *)

@@ -4,11 +4,7 @@
 (*Package Header*)
 
 
-BeginPackage["Toolbelt`"];
-
-
-(* ::Text:: *)
-(*Declare your public symbols here:*)
+BeginPackage["EwanDawson/Toolbelt`"];
 
 
 Datasetize::usage = "Convert a nested structure of lists or rules (for example
@@ -36,15 +32,18 @@ ExtractNested;
 ImportJSONString;
 
 
+NotablePaths::usage = "NotablePaths[] and NotablePaths[\"Local\"] shows the symbols related to standard fiesystem loctions on this machine.
+	NotablePaths[\"Cloud\"] shows the notable paths on the currenly active Wolfram Cloud account.
+	Sort the results using \"SortOrder\"\[Rule]{\"Symbol\",\"Value\"} (default) or \"SortOrder\"\[Rule]{\"Value\",\"Symbol\"}.
+	Change how the results are displayed by setting \"DisplayFunction\" to Automatic (default, dislays results in a Dataset),
+	Rule, None (same as Rule), Normal (same as Rule), Identity (a List of Lists), or your own function that will be applied to the results."
+
+
 Begin["`Private`"];
 
 
 (* ::Section:: *)
 (*Definitions*)
-
-
-(* ::Text:: *)
-(*Define your public and private symbols here:*)
 
 
 Datasetize[data_] := Dataset[data //. List[rules__Rule /; DuplicateFreeQ@Keys@List@rules] :> Association[rules]];
@@ -101,6 +100,29 @@ ExtractNested[data_, path_List]:=
 
 ImportJSONString[json_String] :=
 	ImportByteArray[StringToByteArray[json, "UTF-8"], "JSON"];
+
+
+NotablePaths[opts : OptionsPattern[]] := NotablePaths["Local", opts];
+
+NotablePaths[location_, OptionsPattern[{"SortOrder" -> {"Symbol", "Value"}, "DisplayFunction" -> Automatic}]] := With[{
+	wrapper = Switch[location,
+      "Local", Identity,
+      "Cloud", CloudEvaluate,
+      _, If[True, $Failed]&],
+    display = Switch[OptionValue["DisplayFunction"],
+      Automatic, Dataset[
+        Map[item |-> <|"Symbol" -> First @ item, "Value" -> Last @ item|>, #],
+        DatasetTheme -> "Minimal",
+        ItemStyle -> {"Symbol" -> Bold}]&,
+      Normal | Rule, Map[Apply[Rule]],
+      None, Identity,
+      _, OptionValue["DisplayFunction"]],
+    sorter = Switch[OptionValue["SortOrder"],
+      {"Symbol", "Value"}, Identity,
+      {"Value", "Symbol"}, Reverse,
+      _, Identity]
+    },
+    wrapper @ display @ SortBy[{#, Symbol[#]}& /@ Union[Names["$*Directory*"], Names["$*Base*"], Names["$*Path*"]], sorter]]
 
 
 (* ::Section:: *)
